@@ -99,6 +99,34 @@ jobs:
           submodules: true
       - uses: ./.github/actions/basic-meson
 
+  MSYS2-mingw64:
+    runs-on: windows-latest
+    env:
+      MESON_BUILD_OPTS: --cross-file build/cross_file_msys2.txt
+      MESON_TEST_OPTS: --num-processes 1
+    steps:
+      # Checkout repo
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: mingw-w64-x86_64-meson mingw-w64-x86_64-toolchain mingw-w64-x86_64-libffi mingw-w64-x86_64-libtasn1
+      - name: Run build steps in MSYS2
+        shell: msys2 {0}
+        run: |
+          ./build/setup-wrapper.sh
+          ./build/run-wrapper.sh meson setup $GITHUB_WORKSPACE/$BUILDDIR -Dstrict=true -Dprefix=$GITHUB_WORKSPACE/$INSTALLDIR -Dlibdir=$GITHUB_WORKSPACE/$INSTALLDIR/lib -Dsysconfdir=$GITHUB_WORKSPACE/$INSTALLDIR/etc -Dtrust_paths=$GITHUB_WORKSPACE/$INSTALLDIR/etc/pki/ca-trust-source:$GITHUB_WORKSPACE/$INSTALLDIR/share/pki/ca-trust-source -Dsystemd=disabled -Dbash_completion=disabled -Dpost_install_test=true $MESON_BUILD_OPTS
+          ./build/run-wrapper.sh ninja -C $GITHUB_WORKSPACE/$BUILDDIR
+          P11_KIT_DEBUG=all ./build/run-wrapper.sh meson test -C $GITHUB_WORKSPACE/$BUILDDIR $MESON_TEST_OPTS
+          mkdir -p $GITHUB_WORKSPACE/$INSTALLDIR/etc/pki/ca-trust-source
+          mkdir -p $GITHUB_WORKSPACE/$INSTALLDIR/share/pki/ca-trust-source
+          mkdir -p $GITHUB_WORKSPACE/$INSTALLDIR/libexec/p11-kit
+          ln -sf /usr/bin/true $GITHUB_WORKSPACE/$INSTALLDIR/libexec/p11-kit/trust-extract-compat
+          ninja -C $GITHUB_WORKSPACE/$BUILDDIR install
+
   cppcheck:
     runs-on: ubuntu-latest
     container:
